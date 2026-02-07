@@ -12,7 +12,7 @@ import {
   Heart,
   Target,
   Star,
-  Muscle,
+  Dumbbell,
   Mail,
   Compass,
   BarChart3,
@@ -41,7 +41,7 @@ const actions: ActionItem[] = [
   // רגש
   { icon: Heart, label: 'הכרת תודה', description: 'על מה תודה?', href: '/gratitude/new', color: '#EC4899', bgColor: '#FCE7F3', category: 'רגש' },
   { icon: Star, label: 'משאלה', description: 'מה אני מאחל לעצמי', href: '/wishes/new', color: '#F59E0B', bgColor: '#FEF3C7', category: 'רגש' },
-  { icon: Muscle, label: 'כוחות שלי', description: 'אני טוב ב...', href: '/strengths/new', color: '#10B981', bgColor: '#D1FAE5', category: 'רגש' },
+  { icon: Dumbbell, label: 'כוחות שלי', description: 'אני טוב ב...', href: '/strengths/new', color: '#10B981', bgColor: '#D1FAE5', category: 'רגש' },
   // מטרות
   { icon: Target, label: 'מטרה חדשה', description: 'לאן אני הולך', href: '/goals/new', color: '#7C3AED', bgColor: '#EDE9FE', category: 'מטרות' },
   { icon: BarChart3, label: 'מעקב', description: 'מעקב חדש', href: '/tracking', color: '#6366F1', bgColor: '#E0E7FF', category: 'מטרות' },
