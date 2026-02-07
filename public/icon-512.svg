@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7C3AED"/>
+      <stop offset="100%" style="stop-color:#4F46E5"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#grad)"/>
+  <g fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Brain/Mind shape -->
+    <path d="M256 130c-54 0-96 43-96 96 0 32 16 60 40 76v76h112v-76c24-16 40-44 40-76 0-53-42-96-96-96z"/>
+    <!-- Inner thought lines -->
+    <path d="M218 212h76M218 244h76M218 276h48"/>
+    <!-- Lock/vault element -->
+    <circle cx="256" cy="346" r="20" fill="#fff"/>
+  </g>
+</svg>
