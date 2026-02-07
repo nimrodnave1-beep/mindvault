@@ -36,18 +36,24 @@ import {
   getAllValues,
   getAllAudioMemos,
   getAllImageEntries,
+  getAllInsights,
+  getAllTrackerEntries,
+  getAllTrackers,
   getMediaBlob,
-  DailyEntry,
-  Session,
-  Highlight,
-  GratitudeEntry,
-  Goal,
-  Wish,
-  Strength,
-  LetterToSelf,
-  Value,
-  AudioMemo,
-  ImageEntry,
+  type DailyEntry,
+  type Session,
+  type Highlight,
+  type GratitudeEntry,
+  type Goal,
+  type Wish,
+  type Strength,
+  type LetterToSelf,
+  type Value,
+  type AudioMemo,
+  type ImageEntry,
+  type Insight,
+  type TrackerEntry,
+  type Tracker,
 } from '@/lib/db';
 import { formatDate } from '@/lib/utils';
 
@@ -70,7 +76,7 @@ const tabs: { value: TabFilter; label: string; icon: typeof PenLine; emptyTitle:
   { value: 'all', label: 'הכל', icon: FolderHeart, emptyTitle: 'כאן יתחיל המסע שלך', emptyCta: 'רשומה ראשונה', ctaHref: '/today' },
   { value: 'entries', label: 'רשומות', icon: PenLine, emptyTitle: 'כתוב את הרשומה הראשונה', emptyCta: 'רשומה חדשה', ctaHref: '/today' },
   { value: 'sessions', label: 'פגישות', icon: BookOpen, emptyTitle: 'הוסף סיכום מהפגישה האחרונה', emptyCta: 'הוסף סיכום', ctaHref: '/therapy/new' },
-  { value: 'insights', label: 'תובנות', icon: Sparkles, emptyTitle: 'תובנות נוצרות מהכתיבה שלך', emptyCta: 'הוסף תובנה', ctaHref: '/today' },
+  { value: 'insights', label: 'תובנות', icon: Sparkles, emptyTitle: 'תובנות נוצרות מהכתיבה שלך', emptyCta: 'הוסף תובנה', ctaHref: '/insights' },
   { value: 'goals', label: 'מטרות', icon: Target, emptyTitle: 'מה חשוב לך לעבוד עליו?', emptyCta: 'הגדר מטרה', ctaHref: '/goals/new' },
   { value: 'wishes', label: 'משאלות', icon: Star, emptyTitle: 'מה אתה מאחל לעצמך?', emptyCta: 'הוסף משאלה', ctaHref: '/wishes/new' },
   { value: 'gratitude', label: 'תודה', icon: Heart, emptyTitle: 'על מה אתה מודה?', emptyCta: 'הכרת תודה', ctaHref: '/gratitude/new' },
@@ -179,7 +185,7 @@ export default function JourneyPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [entries, sessions, highlights, gratitude, goals, wishes, strengths, letters, values, audioMemos, imageEntries] = await Promise.all([
+        const [entries, sessions, highlights, gratitude, goals, wishes, strengths, letters, values, audioMemos, imageEntries, insights, trackerEntries, trackers] = await Promise.all([
           getAllEntries(),
           getAllSessions(),
           getAllHighlights(),
@@ -191,6 +197,9 @@ export default function JourneyPage() {
           getAllValues(),
           getAllAudioMemos(),
           getAllImageEntries(),
+          getAllInsights(),
+          getAllTrackerEntries(),
+          getAllTrackers(),
         ]);
 
         const combined: TimelineItem[] = [
@@ -242,6 +251,19 @@ export default function JourneyPage() {
             content: img.note || 'תמונה', topicId: img.primaryTopicId,
             mediaBlobKey: img.blobKey, mediaType: 'image' as const,
           })),
+          ...insights.map((ins) => ({
+            id: ins.id, date: ins.createdAt.split('T')[0], type: 'insights' as TabFilter,
+            content: ins.title + (ins.body ? ` — ${ins.body}` : ''), topicId: ins.primaryTopicId,
+            subtype: ins.type,
+          })),
+          ...trackerEntries.map((te) => {
+            const tracker = trackers.find(t => t.id === te.trackerId);
+            return {
+              id: te.id, date: te.date, type: 'tracking' as TabFilter,
+              content: `${tracker?.name || 'מעקב'}: ${te.value}${te.note ? ` — ${te.note}` : ''}`,
+              topicId: tracker?.primaryTopicId ?? null,
+            };
+          }),
         ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         setItems(combined);

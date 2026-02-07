@@ -37,7 +37,7 @@ const actions: ActionItem[] = [
   // טיפול
   { icon: BookOpen, label: 'סיכום פגישה', description: 'סיכום טיפול', href: '/therapy/new', color: '#0D9488', bgColor: '#CCFBF1', category: 'טיפול' },
   { icon: ListChecks, label: 'נקודה לאג\'נדה', description: 'לפגישה הבאה', href: '/agenda?add=true', color: '#7C3AED', bgColor: '#EDE9FE', category: 'טיפול' },
-  { icon: Sparkles, label: 'תובנה', description: 'הבנתי ש...', href: '/today?type=insight', color: '#F59E0B', bgColor: '#FEF3C7', category: 'טיפול' },
+  { icon: Sparkles, label: 'תובנה', description: 'הבנתי ש...', href: '/insights', color: '#F59E0B', bgColor: '#FEF3C7', category: 'טיפול' },
   // רגש
   { icon: Heart, label: 'הכרת תודה', description: 'על מה תודה?', href: '/gratitude/new', color: '#EC4899', bgColor: '#FCE7F3', category: 'רגש' },
   { icon: Star, label: 'משאלה', description: 'מה אני מאחל לעצמי', href: '/wishes/new', color: '#F59E0B', bgColor: '#FEF3C7', category: 'רגש' },

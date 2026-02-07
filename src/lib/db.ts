@@ -83,7 +83,7 @@ export interface AgendaItem {
   text: string;
   priority: number;
   sourceId: string | null;
-  sourceType: 'entry' | 'summary' | 'manual';
+  sourceType: 'entry' | 'summary' | 'manual' | 'insight';
   status: 'open' | 'done';
   cycleId: string | null;
   primaryTopicId: string | null;
@@ -496,16 +496,91 @@ export interface MediaBlob {
 }
 
 // ============================================
-// RECORDING (existing feature, preserved)
+// INSIGHT TYPES (from baby-memory-studio)
 // ============================================
 
-export interface Recording {
+export type InsightType = 'pattern' | 'boundary' | 'tool' | 'thought' | 'emotion' | 'other';
+
+export interface InsightSourceRange {
+  startOffset: number;
+  endOffset: number;
+  snapshot: string;
+}
+
+export interface Insight {
   id: string;
-  entryId: string;
-  audioBlob: Blob;
-  mimeType: string;
-  transcript: string;
-  duration: number;
+  title: string;
+  body: string | null;
+  type: InsightType;
+  tags: string[];
+  cycleId: string | null;
+  sourceType: 'entry' | 'session' | null;
+  sourceId: string | null;
+  sourceRange: InsightSourceRange | null;
+  pinned: boolean;
+  primaryTopicId: string | null;
+  secondaryTopicIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  isDeleted: boolean;
+}
+
+// ============================================
+// THERAPY CYCLES
+// ============================================
+
+export interface TherapyCycle {
+  id: string;
+  startDate: string;
+  endDate: string | null;
+  sessionId: string;
+}
+
+// ============================================
+// TRACKERS
+// ============================================
+
+export type TrackerValueType = 'boolean' | 'rating_1_5' | 'rating_1_10' | 'count' | 'duration_minutes' | 'note_only';
+export type TrackerFrequency = 'daily' | 'weekly' | null;
+
+export interface Tracker {
+  id: string;
+  name: string;
+  valueType: TrackerValueType;
+  frequency: TrackerFrequency;
+  unit: string | null;
+  tags: string[];
+  isActive: boolean;
+  primaryTopicId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  isDeleted: boolean;
+}
+
+export interface TrackerEntry {
+  id: string;
+  trackerId: string;
+  date: string;
+  value: boolean | number | string;
+  note: string | null;
+  cycleId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  isDeleted: boolean;
+}
+
+// ============================================
+// GOAL CHECK-INS
+// ============================================
+
+export type GoalCheckInStatus = 'on_track' | 'stuck' | 'hard' | 'good';
+
+export interface GoalCheckIn {
+  id: string;
+  goalId: string;
+  date: string;
+  status: GoalCheckInStatus;
+  note: string | null;
   createdAt: string;
 }
 
@@ -784,6 +859,48 @@ interface MindVaultDB extends DBSchema {
     key: string;
     value: MediaBlob;
   };
+  // ---- v5: Insights + Cycles + Trackers + GoalCheckIns ----
+  insights: {
+    key: string;
+    value: Insight;
+    indexes: {
+      'by-primaryTopicId': string;
+      'by-type': string;
+      'by-createdAt': string;
+      'by-cycleId': string;
+    };
+  };
+  cycles: {
+    key: string;
+    value: TherapyCycle;
+    indexes: { 'by-startDate': string };
+  };
+  trackers: {
+    key: string;
+    value: Tracker;
+    indexes: {
+      'by-primaryTopicId': string;
+      'by-isActive': string;
+      'by-name': string;
+    };
+  };
+  trackerEntries: {
+    key: string;
+    value: TrackerEntry;
+    indexes: {
+      'by-trackerId': string;
+      'by-date': string;
+      'by-cycleId': string;
+    };
+  };
+  goalCheckIns: {
+    key: string;
+    value: GoalCheckIn;
+    indexes: {
+      'by-goalId': string;
+      'by-date': string;
+    };
+  };
 }
 
 // ============================================
@@ -791,7 +908,7 @@ interface MindVaultDB extends DBSchema {
 // ============================================
 
 const DB_NAME = 'mindvault';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBPDatabase<MindVaultDB>> | null = null;
 
@@ -980,6 +1097,34 @@ export async function getDB(): Promise<IDBPDatabase<MindVaultDB>> {
             db.createObjectStore('mediaBlobs' as never, { keyPath: 'key' } as never);
           }
         }
+
+        // ---- V5: Insights + Cycles + Trackers + GoalCheckIns ----
+        if (oldVersion < 5) {
+          createStoreWithIndex(db, 'insights', [
+            { name: 'by-primaryTopicId', keyPath: 'primaryTopicId' },
+            { name: 'by-type', keyPath: 'type' },
+            { name: 'by-createdAt', keyPath: 'createdAt' },
+            { name: 'by-cycleId', keyPath: 'cycleId' },
+          ]);
+          if (!db.objectStoreNames.contains('cycles' as never)) {
+            const cycleStore = db.createObjectStore('cycles' as never, { keyPath: 'id' } as never);
+            (cycleStore as unknown as IDBObjectStore).createIndex('by-startDate', 'startDate');
+          }
+          createStoreWithIndex(db, 'trackers', [
+            { name: 'by-primaryTopicId', keyPath: 'primaryTopicId' },
+            { name: 'by-isActive', keyPath: 'isActive' },
+            { name: 'by-name', keyPath: 'name' },
+          ]);
+          createStoreWithIndex(db, 'trackerEntries', [
+            { name: 'by-trackerId', keyPath: 'trackerId' },
+            { name: 'by-date', keyPath: 'date' },
+            { name: 'by-cycleId', keyPath: 'cycleId' },
+          ]);
+          createStoreWithIndex(db, 'goalCheckIns', [
+            { name: 'by-goalId', keyPath: 'goalId' },
+            { name: 'by-date', keyPath: 'date' },
+          ]);
+        }
       },
     });
   }
@@ -993,6 +1138,14 @@ export async function getDB(): Promise<IDBPDatabase<MindVaultDB>> {
 
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+export function getToday(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+export function getNow(): string {
+  return new Date().toISOString();
 }
 
 export function getCurrentCycleId(sessions: Session[]): string | null {
@@ -2250,6 +2403,377 @@ export async function exportAllData(): Promise<{
     tags: await db.getAll('tags'),
   };
 }
+
+// ============================================
+// THERAPY CYCLES CRUD
+// ============================================
+
+export async function getCurrentCycle(): Promise<TherapyCycle | null> {
+  const db = await getDB();
+  const cycles = await db.getAll('cycles');
+  const currentCycle = cycles.find(c => c.endDate === null);
+  return currentCycle || null;
+}
+
+export async function getAsyncCurrentCycleId(): Promise<string> {
+  const current = await getCurrentCycle();
+  if (current) return current.id;
+  const defaultCycle = await createInitialCycle();
+  return defaultCycle.id;
+}
+
+export async function createInitialCycle(): Promise<TherapyCycle> {
+  const db = await getDB();
+  const newCycle: TherapyCycle = {
+    id: generateId(),
+    startDate: getToday(),
+    endDate: null,
+    sessionId: '',
+  };
+  await db.put('cycles', newCycle);
+  return newCycle;
+}
+
+export async function getAllCycles(): Promise<TherapyCycle[]> {
+  const db = await getDB();
+  const cycles = await db.getAll('cycles');
+  return cycles.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+}
+
+export async function getCycle(id: string): Promise<TherapyCycle | undefined> {
+  const db = await getDB();
+  return db.get('cycles', id);
+}
+
+export async function rotateCycleOnNewSession(sessionId: string, sessionDate: string): Promise<TherapyCycle> {
+  const db = await getDB();
+  const currentCycle = await getCurrentCycle();
+  if (currentCycle) {
+    currentCycle.endDate = sessionDate;
+    await db.put('cycles', currentCycle);
+  }
+  const newCycle: TherapyCycle = {
+    id: generateId(),
+    startDate: sessionDate,
+    endDate: null,
+    sessionId,
+  };
+  await db.put('cycles', newCycle);
+  return newCycle;
+}
+
+// ============================================
+// INSIGHTS CRUD
+// ============================================
+
+export async function getAllInsights(): Promise<Insight[]> {
+  const db = await getDB();
+  const insights = await db.getAll('insights');
+  return insights
+    .filter(i => !i.isDeleted)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export async function getInsight(id: string): Promise<Insight | undefined> {
+  const db = await getDB();
+  const insight = await db.get('insights', id);
+  return insight?.isDeleted ? undefined : insight;
+}
+
+export async function getInsightsByType(type: InsightType): Promise<Insight[]> {
+  const db = await getDB();
+  const insights = await db.getAllFromIndex('insights', 'by-type', type);
+  return insights.filter(i => !i.isDeleted);
+}
+
+export async function getPinnedInsights(): Promise<Insight[]> {
+  const all = await getAllInsights();
+  return all.filter(i => i.pinned);
+}
+
+export async function addInsight(
+  insight: Omit<Insight, 'id' | 'createdAt' | 'updatedAt' | 'isDeleted' | 'primaryTopicId' | 'secondaryTopicIds' | 'cycleId'> & {
+    primaryTopicId?: string | null;
+    secondaryTopicIds?: string[];
+    cycleId?: string | null;
+  }
+): Promise<Insight> {
+  const db = await getDB();
+  const now = new Date().toISOString();
+  const newInsight: Insight = {
+    ...insight,
+    id: generateId(),
+    primaryTopicId: insight.primaryTopicId ?? null,
+    secondaryTopicIds: insight.secondaryTopicIds ?? [],
+    cycleId: insight.cycleId ?? null,
+    createdAt: now,
+    updatedAt: now,
+    isDeleted: false,
+  };
+  await db.put('insights', newInsight);
+  return newInsight;
+}
+
+export async function updateInsight(insight: Insight): Promise<Insight> {
+  const db = await getDB();
+  insight.updatedAt = new Date().toISOString();
+  await db.put('insights', insight);
+  return insight;
+}
+
+export async function deleteInsight(id: string): Promise<void> {
+  const db = await getDB();
+  const insight = await db.get('insights', id);
+  if (insight) {
+    insight.isDeleted = true;
+    insight.updatedAt = new Date().toISOString();
+    await db.put('insights', insight);
+  }
+}
+
+export async function addInsightToAgenda(insightId: string): Promise<AgendaItem> {
+  const insight = await getInsight(insightId);
+  if (!insight) throw new Error('Insight not found');
+  const items = await getOpenAgendaItems();
+  return addAgendaItem({
+    text: insight.title,
+    priority: items.length,
+    sourceId: insight.id,
+    sourceType: 'insight',
+    status: 'open',
+    cycleId: insight.cycleId,
+  });
+}
+
+// ============================================
+// GRATITUDE HELPERS (additional)
+// ============================================
+
+export async function getGratitudeEntry(id: string): Promise<GratitudeEntry | undefined> {
+  const db = await getDB();
+  const entry = await db.get('gratitudeEntries', id);
+  return entry?.isDeleted ? undefined : entry;
+}
+
+export async function getGratitudeEntriesByDate(date: string): Promise<GratitudeEntry[]> {
+  const db = await getDB();
+  const entries = await db.getAllFromIndex('gratitudeEntries', 'by-date', date);
+  return entries.filter(e => !e.isDeleted);
+}
+
+export async function getTodayGratitude(): Promise<GratitudeEntry | undefined> {
+  const entries = await getGratitudeEntriesByDate(getToday());
+  return entries[0];
+}
+
+export async function updateGratitudeEntry(entry: GratitudeEntry): Promise<GratitudeEntry> {
+  const db = await getDB();
+  entry.updatedAt = new Date().toISOString();
+  await db.put('gratitudeEntries', entry);
+  return entry;
+}
+
+export async function deleteGratitudeEntry(id: string): Promise<void> {
+  const db = await getDB();
+  const entry = await db.get('gratitudeEntries', id);
+  if (entry) {
+    entry.isDeleted = true;
+    entry.updatedAt = new Date().toISOString();
+    await db.put('gratitudeEntries', entry);
+  }
+}
+
+// ============================================
+// TRACKERS CRUD
+// ============================================
+
+export async function getAllTrackers(): Promise<Tracker[]> {
+  const db = await getDB();
+  const trackers = await db.getAll('trackers');
+  return trackers
+    .filter(t => !t.isDeleted)
+    .sort((a, b) => a.name.localeCompare(b.name, 'he'));
+}
+
+export async function getTracker(id: string): Promise<Tracker | undefined> {
+  const db = await getDB();
+  const tracker = await db.get('trackers', id);
+  return tracker?.isDeleted ? undefined : tracker;
+}
+
+export async function getActiveTrackers(): Promise<Tracker[]> {
+  const all = await getAllTrackers();
+  return all.filter(t => t.isActive);
+}
+
+export async function addTracker(
+  tracker: Omit<Tracker, 'id' | 'createdAt' | 'updatedAt' | 'isDeleted' | 'primaryTopicId'> & {
+    primaryTopicId?: string | null;
+  }
+): Promise<Tracker> {
+  const db = await getDB();
+  const now = new Date().toISOString();
+  const newTracker: Tracker = {
+    ...tracker,
+    id: generateId(),
+    primaryTopicId: tracker.primaryTopicId ?? null,
+    createdAt: now,
+    updatedAt: now,
+    isDeleted: false,
+  };
+  await db.put('trackers', newTracker);
+  return newTracker;
+}
+
+export async function updateTracker(tracker: Tracker): Promise<Tracker> {
+  const db = await getDB();
+  tracker.updatedAt = new Date().toISOString();
+  await db.put('trackers', tracker);
+  return tracker;
+}
+
+export async function deleteTracker(id: string): Promise<void> {
+  const db = await getDB();
+  const tracker = await db.get('trackers', id);
+  if (tracker) {
+    tracker.isDeleted = true;
+    tracker.updatedAt = new Date().toISOString();
+    await db.put('trackers', tracker);
+  }
+}
+
+// ============================================
+// TRACKER ENTRIES CRUD
+// ============================================
+
+export async function getAllTrackerEntries(): Promise<TrackerEntry[]> {
+  const db = await getDB();
+  const entries = await db.getAll('trackerEntries');
+  return entries
+    .filter(e => !e.isDeleted)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+export async function getTrackerEntriesByTracker(trackerId: string): Promise<TrackerEntry[]> {
+  const db = await getDB();
+  const entries = await db.getAllFromIndex('trackerEntries', 'by-trackerId', trackerId);
+  return entries
+    .filter(e => !e.isDeleted)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+export async function getTrackerEntriesByDate(date: string): Promise<TrackerEntry[]> {
+  const db = await getDB();
+  const entries = await db.getAllFromIndex('trackerEntries', 'by-date', date);
+  return entries.filter(e => !e.isDeleted);
+}
+
+export async function getTodayTrackerEntry(trackerId: string): Promise<TrackerEntry | undefined> {
+  const entries = await getTrackerEntriesByDate(getToday());
+  return entries.find(e => e.trackerId === trackerId);
+}
+
+function validateTrackerValue(value: boolean | number | string, valueType: TrackerValueType): { valid: boolean; value: boolean | number | string; error?: string } {
+  switch (valueType) {
+    case 'boolean':
+      return { valid: typeof value === 'boolean', value: Boolean(value) };
+    case 'rating_1_5': {
+      const r5 = Number(value);
+      if (isNaN(r5) || r5 < 1 || r5 > 5) return { valid: false, value, error: 'Rating must be 1-5' };
+      return { valid: true, value: Math.round(r5) };
+    }
+    case 'rating_1_10': {
+      const r10 = Number(value);
+      if (isNaN(r10) || r10 < 1 || r10 > 10) return { valid: false, value, error: 'Rating must be 1-10' };
+      return { valid: true, value: Math.round(r10) };
+    }
+    case 'count': {
+      const count = Number(value);
+      if (isNaN(count) || count < 0) return { valid: false, value, error: 'Count must be non-negative' };
+      return { valid: true, value: Math.round(count) };
+    }
+    case 'duration_minutes': {
+      const dur = Number(value);
+      if (isNaN(dur) || dur < 0) return { valid: false, value, error: 'Duration must be non-negative' };
+      return { valid: true, value: Math.round(dur) };
+    }
+    case 'note_only':
+      return { valid: typeof value === 'string', value: String(value) };
+    default:
+      return { valid: true, value };
+  }
+}
+
+export async function addTrackerEntry(
+  entry: Omit<TrackerEntry, 'id' | 'createdAt' | 'updatedAt' | 'isDeleted' | 'cycleId'> & {
+    cycleId?: string | null;
+  }
+): Promise<TrackerEntry> {
+  const db = await getDB();
+  const now = new Date().toISOString();
+
+  const tracker = await getTracker(entry.trackerId);
+  if (tracker) {
+    const validated = validateTrackerValue(entry.value, tracker.valueType);
+    if (!validated.valid) throw new Error(validated.error);
+    entry.value = validated.value;
+  }
+
+  const newEntry: TrackerEntry = {
+    ...entry,
+    id: generateId(),
+    cycleId: entry.cycleId ?? null,
+    createdAt: now,
+    updatedAt: now,
+    isDeleted: false,
+  };
+  await db.put('trackerEntries', newEntry);
+  return newEntry;
+}
+
+export async function updateTrackerEntry(entry: TrackerEntry): Promise<TrackerEntry> {
+  const db = await getDB();
+  entry.updatedAt = new Date().toISOString();
+  await db.put('trackerEntries', entry);
+  return entry;
+}
+
+export async function deleteTrackerEntry(id: string): Promise<void> {
+  const db = await getDB();
+  const entry = await db.get('trackerEntries', id);
+  if (entry) {
+    entry.isDeleted = true;
+    entry.updatedAt = new Date().toISOString();
+    await db.put('trackerEntries', entry);
+  }
+}
+
+// ============================================
+// GOAL CHECK-INS CRUD
+// ============================================
+
+export async function getGoalCheckIns(goalId: string): Promise<GoalCheckIn[]> {
+  const db = await getDB();
+  const checkIns = await db.getAllFromIndex('goalCheckIns', 'by-goalId', goalId);
+  return checkIns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+export async function addGoalCheckIn(
+  checkIn: Omit<GoalCheckIn, 'id' | 'createdAt'>
+): Promise<GoalCheckIn> {
+  const db = await getDB();
+  const newCheckIn: GoalCheckIn = {
+    ...checkIn,
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+  };
+  await db.put('goalCheckIns', newCheckIn);
+  return newCheckIn;
+}
+
+// ============================================
+// EXPORT FUNCTIONS
+// ============================================
 
 export async function exportToMarkdown(startDate?: string, endDate?: string): Promise<string> {
   const data = await exportAllData();

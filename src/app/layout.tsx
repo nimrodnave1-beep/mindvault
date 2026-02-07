@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Toaster } from 'sonner';
 import { TopicProvider } from '@/lib/topicContext';
+import { InstallPrompt } from '@/components/InstallPrompt';
+import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -37,6 +39,8 @@ export default function RootLayout({
       <body>
         <TopicProvider>
           {children}
+          <InstallPrompt />
+          <ServiceWorkerRegistration />
         </TopicProvider>
         <Toaster 
           position="top-center" 
